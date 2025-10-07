@@ -55,6 +55,7 @@ class Metric:
             )
 
         if isinstance(self, MetricGrouping):
+            # print("Computing sample level metrics for grouping, ", kwargs)    
             return sample_level_fn(**kwargs)
         return {self.metric_name: sample_level_fn(**kwargs)}
 

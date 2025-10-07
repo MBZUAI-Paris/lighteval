@@ -8561,7 +8561,7 @@ gsm_plus = LightevalTaskConfig(
     hf_repo="qintongli/GSM-Plus",
     hf_subset="default",
     hf_avail_splits=["test", "testmini"],
-    evaluation_splits=["test"],
+    evaluation_splits=["testmini"],
     few_shots_split=None,
     few_shots_select=None,
     generation_size=None,
@@ -8596,7 +8596,7 @@ gsm8k_lighteval = LightevalTaskConfig(
     evaluation_splits=["test"],
     few_shots_split=None,
     few_shots_select="random_sampling_from_train",
-    generation_size=256,
+    generation_size=32400,
     metrics=[
         Metrics.expr_gold_metric,
     ],

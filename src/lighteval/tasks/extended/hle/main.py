@@ -101,17 +101,19 @@ class JudgeLLMHLE(JudgeLLM):
             response_format=ExtractedAnswer,
         )
 
-    def compute(self, sample_ids: list[str], responses: list, formatted_docs: list[Doc]) -> list[dict[str, float]]:
+    # def compute(self, sample_ids: list[str], responses: list, formatted_docs: list[Doc]) -> list[dict[str, float]]:
+    def compute(self, responses: list, docs: list[Doc], **kwargs) -> list[dict[str, float]]:
+    
         # If we are evaluating a multiturn task, we need to have specific field in the formatted doc
-        questions = [formatted_doc.specific["question"] for formatted_doc in formatted_docs]
-        golds = [formatted_doc.get_golds()[0] for formatted_doc in formatted_docs]
-        predictions = [response[0].result[0] for response in responses]
+        questions = [formatted_doc.specific["question"] for formatted_doc in docs]
+        golds = [formatted_doc.get_golds()[0] for formatted_doc in docs]
+        predictions = [response[0].text[0] for response in responses]
         options = [None] * len(questions)
 
         score, _, _ = self.judge.evaluate_answer_batch(questions, predictions, options, golds)
 
         metrics = []
-        for i in range(len(sample_ids)):
+        for i in range(len(questions)):
             score[i]["correct_answer"] = golds[i]
             metrics.append(
                 {
@@ -208,12 +210,13 @@ hle_metrics = CorpusLevelMetricGrouping(
     category=SamplingMethod.GENERATIVE,
     sample_level_fn=JudgeLLMHLE(),
     corpus_level_fn=JudgeLLMHLE(),
+    batched_compute=True,
 )
 extend_enum(Metrics, "hle_metrics", hle_metrics)
 
 hle = LightevalTaskConfig(
     name="hle",
-    suite=["lighteval"],
+    suite=["extended"],
     prompt_function=hle_text_only,
     hf_repo="cais/hle",
     hf_subset="default",
@@ -221,7 +224,7 @@ hle = LightevalTaskConfig(
     evaluation_splits=["test"],
     few_shots_split=None,
     few_shots_select=None,
-    generation_size=8192,
+    generation_size=32000,
     metrics=[Metrics.exact_match, Metrics.hle_metrics],
     stop_sequence=[],
     version=0,

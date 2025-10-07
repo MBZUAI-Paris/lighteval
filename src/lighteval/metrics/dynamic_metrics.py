@@ -163,6 +163,7 @@ class MultilingualExtractiveMatchMetric(SampleLevelComputation):
         extraction_mode: Literal["first_match", "any_match"] = "any_match",
         precision: int = 6,
         timeout_seconds: int = 5,
+        latex_gold: bool = False,
     ):
         """Creates a language-aware extractive match metric that extracts answers from the model's output.
 
@@ -204,6 +205,7 @@ class MultilingualExtractiveMatchMetric(SampleLevelComputation):
         self.extraction_mode = extraction_mode
         self.precision = precision
         self.timeout_seconds = timeout_seconds
+        self.latex_gold = latex_gold
 
     @timeout(2)
     def add_to_specifics_with_timeout(
@@ -232,7 +234,7 @@ class MultilingualExtractiveMatchMetric(SampleLevelComputation):
         ]
         extracted_golds = [
             extract_target_from_pred(
-                gold, gold_extraction_regexes, self.fallback_mode, self.extraction_mode, self.timeout_seconds
+                gold, gold_extraction_regexes, self.fallback_mode, self.extraction_mode, self.timeout_seconds, gold=self.latex_gold
             )
             for gold in golds
         ]

@@ -242,6 +242,7 @@ class Pipeline:
             for metric in task.metrics:
                 if metric_data := self._metric_options.get(metric.metric_name, None):
                     num_samples = metric_data.get("num_samples", None)
+                    print(f"Updating {metric.metric_name} num_samples to {num_samples}")
                     if num_samples:
                         task.num_samples = [num_samples]
 

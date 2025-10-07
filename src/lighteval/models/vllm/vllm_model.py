@@ -218,6 +218,7 @@ class VLLMModel(LightevalModel):
 
         # Initialize cache for tokenization and predictions
         self._cache = SampleCache(config)
+        print("config generation parameters: ", config.generation_parameters)
 
     @property
     def tokenizer(self):
@@ -284,7 +285,7 @@ class VLLMModel(LightevalModel):
                     "run, but set `max_model_length` explicitely in the model args."
                 )
             return None
-
+        print("config generation parameters: ", config.generation_parameters)
         model = LLM(**self.model_args)
 
         # If the max_length can't get extracted from the config, it will be inferred from the model
@@ -305,7 +306,7 @@ class VLLMModel(LightevalModel):
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
 
-    @cached(SamplingMethod.GENERATIVE)
+    # @cached(SamplingMethod.GENERATIVE)
     def greedy_until(
         self,
         docs: list[Doc],
@@ -342,7 +343,7 @@ class VLLMModel(LightevalModel):
                 # stop_tokens and max_tokens genrated) which is not necessarily
                 # the case! Because of that we only use batch size of 1
                 stop_tokens = split[0].stop_sequences or []
-
+            
             max_new_tokens = self.config.generation_parameters.max_new_tokens or split[0].generation_size
             num_samples = split[0].num_samples
 
@@ -416,12 +417,14 @@ class VLLMModel(LightevalModel):
     ) -> list:
         """Contains the actual logic of the generation."""
         sampling_params = SamplingParams(**self.config.generation_parameters.to_vllm_dict())
-
+        print("config generation parameters: ", self.config.generation_parameters)
+        print("config generation parameters: ", sampling_params)
         if generate:
             sampling_params.n = num_samples
             sampling_params.max_tokens = max_new_tokens
             sampling_params.stop = stop_tokens
             sampling_params.logprobs = 1 if returns_logits else 0
+            sampling_params.seed = None
             if num_samples > 1 and sampling_params.temperature == 0:
                 raise ValueError(
                     "num_samples > 1 is not supported with temperature=0, please set temperature > 0 or use non sampling metrics."
@@ -627,7 +630,7 @@ class AsyncVLLMModel(VLLMModel):
         results = await asyncio.gather(*processed_requests)
         return results
 
-    @cached(SamplingMethod.GENERATIVE)
+    # @cached(SamplingMethod.GENERATIVE)
     async def greedy_until(
         self,
         docs: list[Doc],

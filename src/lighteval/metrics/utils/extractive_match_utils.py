@@ -535,6 +535,7 @@ def extract_target_from_pred(
     fallback_mode: Literal["no_fallback", "first_match"] = "no_fallback",
     extraction_mode: Literal["first_match", "any_match"] = "any_match",
     timeout_seconds: int = 5,
+    gold: Any = False,
 ):
     """Extracts targets from a prediction string using regex patterns.
     Returns first sucesffuly extracted match.
@@ -563,39 +564,50 @@ def extract_target_from_pred(
         for pattern, priority in target_patterns
     ]
     match_found = False
+    
+    
+    if gold:
+        from latex2sympy2_extended.latex2sympy2 import normalize_latex
+        # normalized_pred = normalize_latex(pred, config=target_type.normalization_config)
+        try:
+            extracted_predictions.append(parse_latex_with_timeout(pred, timeout_seconds=timeout_seconds))
+            print(f"gold from {pred} to {extracted_predictions[-1]}")
+        except Exception:  # noqa: E722
+            print(f"failed to parse gold {pred}")
+        extracted_predictions.append(pred)
+    else:
+        # Group patterns by priority using itertools.groupby
+        for _, patterns_group in groupby(sorted(all_patterns, key=lambda x: x[2]), key=lambda x: x[2]):
+            # Find all matches for each pattern in this priority group
+            matches_with_pos = (
+                (match, match.start(), match.end(), target_type)
+                for pattern, target_type, _ in patterns_group
+                for match in pattern.finditer(pred)
+            )
 
-    # Group patterns by priority using itertools.groupby
-    for _, patterns_group in groupby(sorted(all_patterns, key=lambda x: x[2]), key=lambda x: x[2]):
-        # Find all matches for each pattern in this priority group
-        matches_with_pos = (
-            (match, match.start(), match.end(), target_type)
-            for pattern, target_type, _ in patterns_group
-            for match in pattern.finditer(pred)
-        )
+            # Sort matches by end position (rightmost first) and then by start position (leftmost first)
+            matches_with_pos = sorted(matches_with_pos, key=lambda x: (x[2], -x[1]), reverse=True)
 
-        # Sort matches by end position (rightmost first) and then by start position (leftmost first)
-        matches_with_pos = sorted(matches_with_pos, key=lambda x: (x[2], -x[1]), reverse=True)
+            # Try to extract from each match, starting from rightmost
+            for match, _, _, target_type in matches_with_pos:
+                extracted_match, str_fallback = extract_match(match, target_type, timeout_seconds)
+                match_found = True
 
-        # Try to extract from each match, starting from rightmost
-        for match, _, _, target_type in matches_with_pos:
-            extracted_match, str_fallback = extract_match(match, target_type, timeout_seconds)
-            match_found = True
+                if str_fallback:
+                    fallbacks.append(str_fallback)
 
-            if str_fallback:
-                fallbacks.append(str_fallback)
+                if extracted_match is not None:
+                    extracted_predictions.append(extracted_match)
+                    break
 
-            if extracted_match is not None:
-                extracted_predictions.append(extracted_match)
+                if extraction_mode == "first_match":
+                    break
+
+            # If we found something and we're in first_match mode, stop processing other priorities
+            if extracted_predictions or (match_found and extraction_mode == "first_match"):
                 break
 
-            if extraction_mode == "first_match":
-                break
-
-        # If we found something and we're in first_match mode, stop processing other priorities
-        if extracted_predictions or (match_found and extraction_mode == "first_match"):
-            break
-
-    if fallback_mode == "first_match" and fallbacks:
-        extracted_predictions += [fallbacks[0]]
+        if fallback_mode == "first_match" and fallbacks:
+            extracted_predictions += [fallbacks[0]]
 
     return extracted_predictions
