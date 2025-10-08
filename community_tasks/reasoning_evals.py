@@ -496,7 +496,7 @@ aime24_task = LightevalTaskConfig(
     hf_subset="default",
     hf_avail_splits=["train"],
     evaluation_splits=["train"],
-    generation_size=32000,  
+    generation_size=55000,  
     metrics=[aime25_pass_at_1_1n(sample_params={"k": 1, "n": 1})],
     
     version=1,
@@ -511,8 +511,8 @@ aime25_task = LightevalTaskConfig(
     hf_subset="default",
     hf_avail_splits=["train"],
     evaluation_splits=["train"],
-    generation_size=42000,
-    metrics=[aime25_pass_at_1_1n(sample_params={"k": 1, "n": 8})],
+    generation_size=55000,
+    metrics=[aime25_pass_at_1_1n(sample_params={"k": 1, "n": 1})],
     # metrics=[Metrics.pass_at_k_math(sample_params={"k": 1})],
     
     version=1,
@@ -526,7 +526,7 @@ deepmath5 = LightevalTaskConfig(
     hf_subset="default",
     hf_avail_splits=["train"],
     evaluation_splits=["train"],
-    generation_size=31000,
+    generation_size=55000,
     metrics=[deepmath_pass_at_1_1n(sample_params={"k": 1, "n":1})],
     
     version=1,
@@ -540,7 +540,7 @@ deepmath6 = LightevalTaskConfig(
     hf_subset="default",
     hf_avail_splits=["train"],
     evaluation_splits=["train"],
-    generation_size=31000,
+    generation_size=55000,
     metrics=[deepmath_pass_at_1_1n(sample_params={"k": 1, "n":1})],
     
     version=1,
@@ -554,7 +554,7 @@ deepmath7 = LightevalTaskConfig(
     hf_subset="default",
     hf_avail_splits=["train"],
     evaluation_splits=["train"],
-    generation_size=31000,
+    generation_size=55000,
     metrics=[deepmath_pass_at_1_1n(sample_params={"k": 1, "n":1})],
     
     version=1,
@@ -568,7 +568,7 @@ deepmath8 = LightevalTaskConfig(
     hf_subset="default",
     hf_avail_splits=["train"],
     evaluation_splits=["train"],
-    generation_size=31000,
+    generation_size=55000,
     metrics=[deepmath_pass_at_1_1n(sample_params={"k": 1, "n":1})],
     
     version=1,
@@ -582,7 +582,7 @@ deepmath9 = LightevalTaskConfig(
     hf_subset="default",
     hf_avail_splits=["train"],
     evaluation_splits=["train"],
-    generation_size=31000,
+    generation_size=55000,
     metrics=[deepmath_pass_at_1_1n(sample_params={"k": 1, "n": 1})],
     
     version=1,
@@ -597,9 +597,9 @@ gpqa_diamond_instruct_lighteval = LightevalTaskConfig(
     hf_subset="gpqa_diamond",
     hf_avail_splits=["train"],
     evaluation_splits=["train"],
-    generation_size=38000,  # Needed for large reasoning models
+    generation_size=55000,  # Needed for large reasoning models
     metrics=[
-        gpqa_instruct_pass_at_1_1n(sample_params={"k": 1, "n":8}),
+        gpqa_instruct_pass_at_1_1n(sample_params={"k": 1, "n":1}),
     ],
     stop_sequence=[],
     version=1,
@@ -617,7 +617,7 @@ ifeval = LightevalTaskConfig(
     evaluation_splits=["train"],
     few_shots_split="train",
     few_shots_select="random_sampling",
-    generation_size=32000,
+    generation_size=55000,
     stop_sequence=[],
     version="0.1",
 )
@@ -639,7 +639,7 @@ gsm_plus = LightevalTaskConfig(
     evaluation_splits=["testmini"],
     few_shots_split=None,
     few_shots_select=None,
-    generation_size=30000,
+    generation_size=55000,
     metrics=[Metrics.expr_gold_metric],
     stop_sequence=None,
     version=0,
@@ -656,7 +656,7 @@ for subset in lcb_configs:
         hf_subset=subset,
         hf_avail_splits=["test"],
         evaluation_splits=["test"],
-        generation_size=27000,
+        generation_size=55000,
         metrics=[Metrics.lcb_codegen_metric],
         stop_sequence=[],
         version=0,
@@ -672,7 +672,7 @@ lcb_qwen_task = LightevalTaskConfig(
         hf_subset='default',
         hf_avail_splits=["test"],
         evaluation_splits=["test"],
-        generation_size=32768,
+        generation_size=55000,
         metrics=[Metrics.lcb_codegen_metric(sample_params={"k": 1, "n": 16})],
         stop_sequence=[],  # no stop sequence, will use EOS token
         version=0,
@@ -688,7 +688,7 @@ iqtest_2605_task = LightevalTaskConfig(
     hf_subset="default",
     hf_avail_splits=["train"],
     evaluation_splits=["train"],
-    generation_size=30000,
+    generation_size=55000,
     metrics=[iq_test_metric],
     stop_sequence=[],
     version=0,

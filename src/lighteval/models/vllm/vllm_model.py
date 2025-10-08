@@ -26,7 +26,7 @@ import itertools
 import logging
 import os
 from typing import Coroutine, Optional
-
+from lighteval.utils.utils import as_list
 import torch
 from pydantic import NonNegativeFloat, NonNegativeInt, PositiveInt
 from tqdm import tqdm
@@ -180,6 +180,9 @@ class VLLMModelConfig(ModelConfig):
     subfolder: str | None = None
     is_async: bool = False  # Whether to use the async version or sync version of the model
     override_chat_template: bool = None
+    tokenizer_mode: str = "auto"  # tokenizer mode, can be "auto", "mistral", "llama", etc.
+    load_format: str | None = None  # format to load the model, can be "auto", "mistral", "gguf", etc.
+    config_format: str | None = None  # config format, can be "mistral", "llama", etc.
 
 
 @requires("vllm")
@@ -218,6 +221,7 @@ class VLLMModel(LightevalModel):
 
         # Initialize cache for tokenization and predictions
         self._cache = SampleCache(config)
+        self.tokenizer_mode = config.tokenizer_mode
         print("config generation parameters: ", config.generation_parameters)
 
     @property
@@ -265,12 +269,15 @@ class VLLMModel(LightevalModel):
             "max_num_seqs": int(config.max_num_seqs),
             "max_num_batched_tokens": int(config.max_num_batched_tokens),
             "enforce_eager": True,
+            "tokenizer_mode": config.tokenizer_mode,
         }
 
         if config.quantization is not None:
             self.model_args["quantization"] = config.quantization
         if config.load_format is not None:
             self.model_args["load_format"] = config.load_format
+        if config.config_format is not None:
+            self.model_args["config_format"] = config.config_format
 
         if config.data_parallel_size > 1:
             self.model_args["distributed_executor_backend"] = "ray"
@@ -299,11 +306,13 @@ class VLLMModel(LightevalModel):
     def _create_auto_tokenizer(self, config: VLLMModelConfig):
         tokenizer = get_tokenizer(
             config.tokenizer or config.model_name,  # use HF tokenizer for non-HF models, like GGUF model.
-            tokenizer_mode="auto",
+            tokenizer_mode=config.tokenizer_mode,
             trust_remote_code=config.trust_remote_code,
             revision=config.revision,
         )
-        tokenizer.pad_token = tokenizer.eos_token
+        if config.tokenizer_mode != "mistral":
+            # mistral tokenizers do not have an EOS token
+            tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
 
     # @cached(SamplingMethod.GENERATIVE)
@@ -325,6 +334,7 @@ class VLLMModel(LightevalModel):
         self,
         docs: list[Doc],
     ) -> list[ModelResponse]:
+        
         dataset = GenerativeTaskDataset(requests=docs, num_dataset_splits=self.DATASET_SPLITS)
         results = []
 
@@ -348,15 +358,26 @@ class VLLMModel(LightevalModel):
             num_samples = split[0].num_samples
 
             context = [self.prompt_manager.prepare_prompt(doc) for doc in split]
-            tokenized = self.tokenizer(context, add_special_tokens=self.add_special_tokens)
+            # tokenized = self.tokenizer(context, add_special_tokens=self.add_special_tokens)
 
             # The main question for this step is the following:
             # Would we rather truncate the prompt to allow generation to go to max_new_tokens, at the risk
             # of losing some meaning, or have some generations that are exceedingly short?
             # The choice we go for here is to avoid truncating the prompt if we can, since it
             # should have been managed by the prompt creator/few shot manager if requested by the user.
-            inputs = tokenized["input_ids"]
-            context_size = len(inputs[0])
+            if self.tokenizer_mode != "mistral":
+                tokenized = self.tokenizer(context, add_special_tokens=self.add_special_tokens)
+
+                # The main question for this step is the following:
+                # Would we rather truncate the prompt to allow generation to go to max_new_tokens, at the risk
+                # of losing some meaning, or have some generations that are exceedingly short?
+                # The choice we go for here is to avoid truncating the prompt if we can, since it
+                # should have been managed by the prompt creator/few shot manager if requested by the user.
+                inputs = tokenized["input_ids"]
+                context_size = len(inputs[0])
+            else:
+                inputs = context
+                context_size = max(len(ids) for ids in inputs)
 
             # left truncate the inputs to the maximum length
             if self.max_length is None:
@@ -424,7 +445,6 @@ class VLLMModel(LightevalModel):
             sampling_params.max_tokens = max_new_tokens
             sampling_params.stop = stop_tokens
             sampling_params.logprobs = 1 if returns_logits else 0
-            sampling_params.seed = None
             if num_samples > 1 and sampling_params.temperature == 0:
                 raise ValueError(
                     "num_samples > 1 is not supported with temperature=0, please set temperature > 0 or use non sampling metrics."

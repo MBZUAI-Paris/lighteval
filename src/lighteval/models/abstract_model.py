@@ -23,7 +23,7 @@
 import json
 import re
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import torch
 import yaml
@@ -133,21 +133,88 @@ class ModelConfig(BaseModel, extra="forbid"):
                 'model': {'model_name': 'gpt2', 'use_cache': True, 'generation_parameters': {'temperature': 0.7}},
             }
         """
-        # Looking for generation_parameters in the model_args
-        generation_parameters_dict = None
-        pattern = re.compile(r"(\w+)=(\{.*\}|[^,]+)")
-        matches = pattern.findall(args)
-        for key, value in matches:
-            key = key.strip()
-            if key == "generation_parameters":
-                # Keys must be quoted (since they are strings)
-                gen_params = re.sub(r"(\w+):", r'"\1":', value)
-                # for k, v where v are strings, we quote them too
-                gen_params = re.sub(r":\s*([A-Za-z_][\w.-]*)\s*(?=[,}])", r':"\1"', gen_params)
-                generation_parameters_dict = json.loads(gen_params)
+        def _split_top_level(commasep: str) -> list[str]:
+            tokens: list[str] = []
+            current: list[str] = []
+            depth = 0
+            in_single = False
+            in_double = False
+            escape_next = False
 
-        args = re.sub(r"generation_parameters=\{.*?\},?", "", args).strip(",")
-        model_config = {k.split("=")[0]: k.split("=")[1] if "=" in k else True for k in args.split(",")}
+            for char in commasep:
+                if escape_next:
+                    current.append(char)
+                    escape_next = False
+                    continue
+
+                if char == "\\":
+                    current.append(char)
+                    escape_next = True
+                    continue
+
+                if char == "'" and not in_double:
+                    in_single = not in_single
+                elif char == '"' and not in_single:
+                    in_double = not in_double
+                elif char == "{" and not in_single and not in_double:
+                    depth += 1
+                elif char == "}" and not in_single and not in_double:
+                    depth = max(depth - 1, 0)
+                elif (char == ","
+                      and depth == 0
+                      and not in_single
+                      and not in_double):
+                    token = "".join(current).strip()
+                    if token:
+                        tokens.append(token)
+                    current = []
+                    continue
+
+                current.append(char)
+
+            if current:
+                token = "".join(current).strip()
+                if token:
+                    tokens.append(token)
+
+            return tokens
+
+        tokens = _split_top_level(args)
+        generation_parameters_dict = None
+        model_config: dict[str, Any] = {}
+
+        for token in tokens:
+            if "=" in token:
+                key, value = token.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+
+                if key == "generation_parameters":
+                    if value.startswith(("'", '"')) and value.endswith(value[0]):
+                        value = value[1:-1]
+
+                    # Support both strict JSON and the original permissive syntax.
+                    if value and value[0] == "{" and value[-1] == "}":
+                        json_value = value
+                        # Keys must be quoted for json.loads; keep backward compatibility.
+                        if not re.search(r'"\s*:', value):
+                            json_value = re.sub(r"(\w+):", r'"\1":', value)
+                            json_value = re.sub(
+                                r':\s*([A-Za-z_][\w.-]*)\s*(?=[,}])', r':"\1"', json_value
+                            )
+                        generation_parameters_dict = json.loads(json_value)
+                    else:
+                        raise ValueError(
+                            "generation_parameters must be a mapping enclosed in braces."
+                        )
+                    continue
+
+                if value.startswith(("'", '"')) and value.endswith(value[0]):
+                    value = value[1:-1]
+
+                model_config[key] = value
+            else:
+                model_config[token.strip()] = True
 
         if generation_parameters_dict is not None:
             model_config["generation_parameters"] = generation_parameters_dict
@@ -225,6 +292,8 @@ class LightevalModel(ABC):
             add_special_tokens = self.add_special_tokens
         if isinstance(str_to_encode, str):
             return self.tokenizer.encode(str_to_encode, add_special_tokens=add_special_tokens)
+        elif self.tokenizer_mode == "mistral":
+            return str_to_encode
         return self.tokenizer(
             str_to_encode,
             padding=True,

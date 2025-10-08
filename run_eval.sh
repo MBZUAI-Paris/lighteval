@@ -53,8 +53,9 @@ display_help() {
 # --- Argument Parsing ---
 MODELS=()
 BENCHMARK=""
+CTX_LEN="32768"  # Default context length
 
-while getopts ":hb:m:" opt; do
+while getopts ":hb:m:c:" opt; do
   case ${opt} in
     h)
       display_help
@@ -65,6 +66,9 @@ while getopts ":hb:m:" opt; do
       ;;
     m)
       MODELS+=("$OPTARG")
+      ;;
+    c)
+      CTX_LEN=$OPTARG
       ;;
     \?)
       echo "Invalid Option: -$OPTARG" 1>&2
@@ -120,172 +124,73 @@ huggingface-cli login --token "$HF_TOKEN"
 echo "Starting evaluation for benchmark: $BENCHMARK"
 
 case "$BENCHMARK" in
-  "aime24")
-    echo "Configuring for AIME24 (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      # echo "Running evaluation for model: $MODEL"
-        lighteval vllm \
-            "model_name=${MODEL},dtype=bfloat16,max_model_length=32768,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
-            "community|aime24|0|0" \
-            --custom-tasks community_tasks/reasoning_evals.py \
-            --save-details \
-            --output-dir "./results/${BENCHMARK}_${SAFE_NAME}" 
-      # fi
-    done
-    ;;
-
-  "aime25" | "iq_test")
+  "aime25" | "iq_test" | "aime24" | "math_500" | "gsm8k" | "deepmath5" | "deepmath6" | "deepmath7" | "deepmath8" | "deepmath9" | "gsm_plus" | "gpqa" | "ifeval" | "mmlu" | "hle" | "lcb" | "lcb_qwen")
     TASK_STRING=""
     DTYPE="bfloat16"
     if [ "$BENCHMARK" == "aime25" ]; then
-      TASK_STRING="community|aime25|0,community|aime25|0,community|aime25|0,community|aime25|0,community|aime25|0,community|aime25|0,community|aime25|0,community|aime25|0"
+      TASK_STRING="community|aime25|0"
+    elif [ "$BENCHMARK" == "aime24" ]; then
+      TASK_STRING="community|aime24|0"
+    elif [ "$BENCHMARK" == "iq_test" ]; then
+      TASK_STRING="community|iqtest_2605|0|0"
+    elif [ "$BENCHMARK" == "math_500" ]; then
+      TASK_STRING="lighteval|math_500|0|0"
+    elif [ "$BENCHMARK" == "gsm8k" ]; then
+      TASK_STRING="lighteval|gsm8k|0|0"
+    elif [ "$BENCHMARK" == "gsm_plus" ]; then
+      TASK_STRING="lighteval|gsm_plus|0|0"
+    elif [[ "$BENCHMARK" == "deepmath"* ]]; then
+      TASK_STRING="community|$BENCHMARK|0|0"
+    elif [ "$BENCHMARK" == "gpqa" ]; then
+      TASK_STRING="community|gpqa:diamond|0|0"
+    elif [ "$BENCHMARK" == "ifeval" ]; then
+      TASK_STRING="extended|ifeval|0|0"
+    elif [ "$BENCHMARK" == "mmlu" ]; then
+      TASK_STRING="original|mmlu:anatomy|0,original|mmlu:abstract_algebra|0,original|mmlu:astronomy|0,original|mmlu:business_ethics|0,original|mmlu:clinical_knowledge|0,original|mmlu:college_biology|0,original|mmlu:college_chemistry|0,original|mmlu:college_computer_science|0,original|mmlu:college_mathematics|0,original|mmlu:college_medicine|0,original|mmlu:college_physics|0,original|mmlu:computer_security|0,original|mmlu:conceptual_physics|0,original|mmlu:econometrics|0,original|mmlu:electrical_engineering|0,original|mmlu:elementary_mathematics|0,original|mmlu:formal_logic|0,original|mmlu:global_facts|0,original|mmlu:high_school_biology|0,original|mmlu:high_school_chemistry|0,original|mmlu:high_school_computer_science|0,original|mmlu:high_school_european_history|0,original|mmlu:high_school_geography|0,original|mmlu:high_school_government_and_politics|0,original|mmlu:high_school_macroeconomics|0,original|mmlu:high_school_mathematics|0,original|mmlu:high_school_microeconomics|0,original|mmlu:high_school_physics|0,original|mmlu:high_school_psychology|0,original|mmlu:high_school statistics|0,original|mmlu:high_school_us_history|0,original|mmlu:high_school_world_history|0,original|mmlu:human_aging|0,original|mmlu:human_sexuality|0,original|mmlu:international_law|0,original|mmlu:jurisprudence|0,original|mmlu:logical_fallacies|0,original|mmlu:machine_learning|0,original|mmlu:management|0,original|mmlu:marketing|0,original|mmlu:medical_genetics|0,original|mmlu:miscellaneous|0,original|mmlu:moral_disputes|0,original|mmlu:moral_scenarios|0,original|mmlu:nutrition|0,original|mmlu:philosophy|0,original|mmlu:prehistory|0,original|mmlu:professional_accounting|0,original|mmlu:professional_law|0,original|mmlu:professional_medicine|0,original|mmlu:professional_psychology|0,original|mmlu:public_relations|0,original|mmlu:security_studies|0,original|mmlu:sociology|0,original|mmlu:us_foreign_policy|0,original|mmlu:virology|0,original|mmlu:world_religions|0"
+    elif [ "$BENCHMARK" == "hle" ]; then
+      TASK_STRING="extended|hle|0"
+    elif [ "$BENCHMARK" == "lcb" ]; then
+      TASK_STRING="extended|lcb:codegeneration_v5|0|0"
+    elif [ "$BENCHMARK" == "lcb_qwen" ]; then
+      TASK_STRING="extended|lcb:codegeneration_qwen|0"
     else
-      TASK_STRING="community|iqtest_2605|0"
-      DTYPE="bfloat16"
+      echo "Error: Unknown benchmark '$BENCHMARK'"
     fi
+    echo "Using context length: $CTX_LEN"
+    echo "Using TASK_STRING: $TASK_STRING"
     echo "Configuring for $BENCHMARK (vllm backend, serial execution)"
     for MODEL in "${MODELS[@]}"; do
+      if [[ "$MODEL" == *"Qwen/"* ]]; then
+        generation_parameters="{\"temperature\":0.6,\"top_p\":0.95,\"top_k\":20,\"max_new_tokens\":\"${CTX_LEN}\",\"seed\":9999}"
+        echo "Using Qwen generation parameters: $generation_parameters"
+        model_args="model_name=${MODEL},dtype=${DTYPE},seed=1234,max_model_length=102000,trust_remote_code=true,tensor_parallel_size=8,generation_parameters=${generation_parameters}"
+      elif [[ "$MODEL" == "LM360/K2-Think" ]]; then
+        generation_parameters="{\"temperature\":1.0,\"top_p\":0.95,\"max_new_tokens\":\"${CTX_LEN}\",\"seed\":9999}"
+        echo "Using LM360/K2-Think generation parameters: $generation_parameters"
+        model_args="model_name=${MODEL},dtype=${DTYPE},seed=1234,max_model_length=102000,trust_remote_code=true,tensor_parallel_size=8,generation_parameters=${generation_parameters}"
+      elif [[ "$MODEL" == *"mistralai/"* ]]; then
+        system_prompt='First draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown, and use LaTeX for any mathematical equations. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response. Use the same language as the input.[/THINK]Here, provide a self-contained response.'
+        generation_parameters="{\"temperature\":0.7,\"top_p\":0.95,\"max_new_tokens\":\"${CTX_LEN}\",\"seed\":9999}"
+        echo "Using Mistral generation parameters: $generation_parameters"  
+        model_args="model_name=${MODEL},dtype=${DTYPE},seed=1234,max_model_length=102000,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":0.7,\"top_p\":0.95,\"max_new_tokens\":38000},tokenizer_mode=mistral,config_format=mistral,load_format=mistral,system_prompt=\"${system_prompt}\""
+      elif [[ "$MODEL" == "HuggingFaceTB/SmolLM3-3B" ]]; then
+        generation_parameters="{\"temperature\":0.6,\"top_p\":0.95,\"max_new_tokens\":\"${CTX_LEN}\",\"seed\":9999}"
+        echo "Using LM360 generation parameters: $generation_parameters"
+        model_args="model_name=${MODEL},dtype=${DTYPE},seed=1234,max_model_length=65000,trust_remote_code=true,tensor_parallel_size=1,generation_parameters=${generation_parameters}"
+      else
+        generation_parameters="{\"temperature\":1.0,\"max_new_tokens\":\"${CTX_LEN}\",\"seed\":9999}"
+        echo "Using default generation parameters: $generation_parameters"
+        model_args="model_name=${MODEL},dtype=${DTYPE},seed=1234,max_model_length=102000,trust_remote_code=true,tensor_parallel_size=8,generation_parameters=${generation_parameters}"
+      fi
       SAFE_NAME="${MODEL//\//_}"
       lighteval vllm \
-          "model_name=${MODEL},dtype=${DTYPE},max_model_length=44768,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
+          "${model_args}" \
           "$TASK_STRING" \
           --custom-tasks community_tasks/reasoning_evals.py \
           --save-details \
-          --output-dir "./results/${BENCHMARK}_${SAFE_NAME}"
+          --output-dir "./results_${CTX_LEN}/${BENCHMARK}_${SAFE_NAME}"
     done
     ;;
-
-  "lcb")
-    echo "Configuring for LiveCodeBench (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      lighteval vllm \
-        "model_name=${MODEL},dtype=bfloat16,max_model_length=32768,gpu_memory_utilization=0.9,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
-        "extended|lcb:codegeneration_v5|0|0" \
-        --custom-tasks community_tasks/reasoning_evals.py \
-        --save-details \
-        --output-dir "./results/${BENCHMARK}_v5/${SAFE_NAME}"
-    done
-    ;;
-
-  "lcb_qwen")
-    echo "Configuring for LiveCodeBench (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      lighteval vllm \
-        "model_name=${MODEL},dtype=bfloat16,max_model_length=32768,gpu_memory_utilization=0.9,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
-        "extended|lcb:codegeneration_qwen|0" \
-        --custom-tasks community_tasks/reasoning_evals.py \
-        --save-details \
-        --output-dir "./results/${BENCHMARK}_v6/${SAFE_NAME}"
-    done
-    ;;
-  
-  "hle")
-    echo "Configuring for LiveCodeBench (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      lighteval vllm \
-        "model_name=${MODEL},dtype=bfloat16,max_model_length=32768,gpu_memory_utilization=0.9,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
-        "extended|hle|0" \
-        --custom-tasks community_tasks/reasoning_evals.py \
-        --save-details \
-        --output-dir "./results/${BENCHMARK}/${SAFE_NAME}"
-    done
-    ;;
-
-  "mmlu")
-    echo "Configuring for LiveCodeBench (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      lighteval vllm \
-        "model_name=${MODEL},dtype=bfloat16,max_model_length=44768,gpu_memory_utilization=0.9,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
-        "original|mmlu:anatomy|0,original|mmlu:abstract_algebra|0,original|mmlu:astronomy|0,original|mmlu:business_ethics|0,original|mmlu:clinical_knowledge|0,original|mmlu:college_biology|0,original|mmlu:college_chemistry|0,original|mmlu:college_computer_science|0,original|mmlu:college_mathematics|0,original|mmlu:college_medicine|0,original|mmlu:college_physics|0,original|mmlu:computer_security|0,original|mmlu:conceptual_physics|0,original|mmlu:econometrics|0,original|mmlu:electrical_engineering|0,original|mmlu:elementary_mathematics|0,original|mmlu:formal_logic|0,original|mmlu:global_facts|0,original|mmlu:high_school_biology|0,original|mmlu:high_school_chemistry|0,original|mmlu:high_school_computer_science|0,original|mmlu:high_school_european_history|0,original|mmlu:high_school_geography|0,original|mmlu:high_school_government_and_politics|0,original|mmlu:high_school_macroeconomics|0,original|mmlu:high_school_mathematics|0,original|mmlu:high_school_microeconomics|0,original|mmlu:high_school_physics|0,original|mmlu:high_school_psychology|0,original|mmlu:high_school_statistics|0,original|mmlu:high_school_us_history|0,original|mmlu:high_school_world_history|0,original|mmlu:human_aging|0,original|mmlu:human_sexuality|0,original|mmlu:international_law|0,original|mmlu:jurisprudence|0,original|mmlu:logical_fallacies|0,original|mmlu:machine_learning|0,original|mmlu:management|0,original|mmlu:marketing|0,original|mmlu:medical_genetics|0,original|mmlu:miscellaneous|0,original|mmlu:moral_disputes|0,original|mmlu:moral_scenarios|0,original|mmlu:nutrition|0,original|mmlu:philosophy|0,original|mmlu:prehistory|0,original|mmlu:professional_accounting|0,original|mmlu:professional_law|0,original|mmlu:professional_medicine|0,original|mmlu:professional_psychology|0,original|mmlu:public_relations|0,original|mmlu:security_studies|0,original|mmlu:sociology|0,original|mmlu:us_foreign_policy|0,original|mmlu:virology|0,original|mmlu:world_religions|0" \
-        --custom-tasks community_tasks/reasoning_evals.py \
-        --save-details \
-        --output-dir "./results/${BENCHMARK}/${SAFE_NAME}"
-    done
-    ;;
-
-  "gpqa")
-    echo "Configuring for GPQA (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      lighteval vllm \
-        "model_name=${MODEL},dtype=bfloat16,max_model_length=32768,seed=1234,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"max_new_tokens\":29100, \"temperature\":1.0, \"seed\":4}" \
-        "community|gpqa:diamond|0|0" \
-        --custom-tasks community_tasks/reasoning_evals.py \
-        --save-details \
-        --output-dir "./results/${BENCHMARK}_diamond/${SAFE_NAME}"
-    done
-    ;;
-
-  "ifeval")
-    echo "Configuring for IFEval (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      lighteval vllm \
-          "model_name=${MODEL},dtype=bfloat16,max_model_length=32768,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
-          "extended|ifeval|0|0" \
-          --custom-tasks community_tasks/reasoning_evals.py \
-          --save-details \
-          --output-dir "./results/${BENCHMARK}_${SAFE_NAME}"
-    done
-    ;;
-
-  "math_500")
-    echo "Configuring for IFEval (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      lighteval vllm \
-          "model_name=${MODEL},dtype=bfloat16,max_model_length=32768,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
-          "lighteval|math_500|0|0" \
-          --custom-tasks community_tasks/reasoning_evals.py \
-          --save-details \
-          --output-dir "./results/${BENCHMARK}_${SAFE_NAME}"
-    done
-    ;;
-
-  "gsm8k")
-    echo "Configuring for IFEval (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      lighteval vllm \
-          "model_name=${MODEL},dtype=bfloat16,max_model_length=32768,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
-          "lighteval|gsm8k|0|0" \
-          --custom-tasks community_tasks/reasoning_evals.py \
-          --save-details \
-          --output-dir "./results/${BENCHMARK}_${SAFE_NAME}"
-    done
-    ;;
-  
-  "gsm_plus")
-    echo "Configuring for IFEval (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      lighteval vllm \
-          "model_name=${MODEL},dtype=bfloat16,max_model_length=32768,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
-          "lighteval|gsm_plus|0|0" \
-          --custom-tasks community_tasks/reasoning_evals.py \
-          --save-details \
-          --output-dir "./results/${BENCHMARK}_${SAFE_NAME}"
-    done
-    ;;
-
-    "deepmath5" | "deepmath6" | "deepmath7" | "deepmath8" | "deepmath9")
-    echo "Configuring for IFEval (vllm backend)"
-    for MODEL in "${MODELS[@]}"; do
-      SAFE_NAME="${MODEL//\//_}"
-      lighteval vllm \
-          "model_name=${MODEL},dtype=bfloat16,max_model_length=32768,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":1.0}" \
-          "community|$BENCHMARK|0|0" \
-          --custom-tasks community_tasks/reasoning_evals.py \
-          --save-details \
-          --output-dir "./results/${BENCHMARK}_${SAFE_NAME}"
-    done
-    ;;
-
 
   *)
     echo "Error: Unknown benchmark '$BENCHMARK'"

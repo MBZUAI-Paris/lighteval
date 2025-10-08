@@ -28,6 +28,7 @@ import random
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import Enum, auto
+import torch
 
 import numpy as np
 from tqdm import tqdm
@@ -247,9 +248,15 @@ class Pipeline:
                         task.num_samples = [num_samples]
 
     def _init_random_seeds(self):
-        logger.info("--- INIT SEEDS ---")
+        seed = 0
+        logger.info("--- INIT SEEDS (seed=%s) ---", seed)
+        os.environ["PYTHONHASHSEED"] = str(seed)
         random.seed(1234)
         np.random.seed(1234)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
 
     def _init_accelerator_seeds(self):
         if self.accelerator is not None:
