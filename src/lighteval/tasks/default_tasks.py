@@ -8596,7 +8596,7 @@ gsm8k_lighteval = LightevalTaskConfig(
     evaluation_splits=["test"],
     few_shots_split=None,
     few_shots_select="random_sampling_from_train",
-    generation_size=32400,
+    generation_size=55000,
     metrics=[
         Metrics.expr_gold_metric,
     ],
@@ -10431,7 +10431,7 @@ math_500 = LightevalTaskConfig(
     evaluation_splits=["test"],
     few_shots_split=None,
     few_shots_select=None,
-    generation_size=32768,
+    generation_size=55000,
     metrics=[
         Metrics.pass_at_k_math(sample_params={"k": 1, "n": 1}),
     ],

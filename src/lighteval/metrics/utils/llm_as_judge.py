@@ -146,6 +146,24 @@ class JudgeLM:
         if self.backend == "inference-providers" and self.hf_provider is None:
             raise ValueError("When using 'inference-providers' as backend, you must specify an 'hf_provider'")
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # Drop runtime-only clients that rely on thread locks before pickling/deepcopy.
+        state["client"] = None
+        state["pipe"] = None
+        state.pop("sampling_params", None)
+        state.pop("tokenizer", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # Recreate lazy attributes on demand after unpickling.
+        self.client = None
+        self.pipe = None
+        if self.backend == "vllm":
+            self.sampling_params = None
+            self.tokenizer = None
+
     def __lazy_load_client(self):  # noqa: C901
         match self.backend:
             # Both "openai" and "tgi" backends use the OpenAI-compatible API

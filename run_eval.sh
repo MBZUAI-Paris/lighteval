@@ -161,24 +161,24 @@ case "$BENCHMARK" in
     echo "Configuring for $BENCHMARK (vllm backend, serial execution)"
     for MODEL in "${MODELS[@]}"; do
       if [[ "$MODEL" == *"Qwen/"* ]]; then
-        generation_parameters="{\"temperature\":0.6,\"top_p\":0.95,\"top_k\":20,\"max_new_tokens\":\"${CTX_LEN}\",\"seed\":9999}"
+        generation_parameters="{\"temperature\":0.6,\"top_p\":0.95,\"top_k\":20,\"max_new_tokens\":\"${CTX_LEN}\"}"
         echo "Using Qwen generation parameters: $generation_parameters"
         model_args="model_name=${MODEL},dtype=${DTYPE},seed=1234,max_model_length=102000,trust_remote_code=true,tensor_parallel_size=8,generation_parameters=${generation_parameters}"
       elif [[ "$MODEL" == "LM360/K2-Think" ]]; then
-        generation_parameters="{\"temperature\":1.0,\"top_p\":0.95,\"max_new_tokens\":\"${CTX_LEN}\",\"seed\":9999}"
+        generation_parameters="{\"temperature\":1.0,\"top_p\":0.95,\"max_new_tokens\":\"${CTX_LEN}\"}"
         echo "Using LM360/K2-Think generation parameters: $generation_parameters"
         model_args="model_name=${MODEL},dtype=${DTYPE},seed=1234,max_model_length=102000,trust_remote_code=true,tensor_parallel_size=8,generation_parameters=${generation_parameters}"
       elif [[ "$MODEL" == *"mistralai/"* ]]; then
         system_prompt='First draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown, and use LaTeX for any mathematical equations. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response. Use the same language as the input.[/THINK]Here, provide a self-contained response.'
-        generation_parameters="{\"temperature\":0.7,\"top_p\":0.95,\"max_new_tokens\":\"${CTX_LEN}\",\"seed\":9999}"
+        generation_parameters="{\"temperature\":0.7,\"top_p\":0.95,\"max_new_tokens\":\"${CTX_LEN}\"}"
         echo "Using Mistral generation parameters: $generation_parameters"  
         model_args="model_name=${MODEL},dtype=${DTYPE},seed=1234,max_model_length=102000,trust_remote_code=true,tensor_parallel_size=8,generation_parameters={\"temperature\":0.7,\"top_p\":0.95,\"max_new_tokens\":38000},tokenizer_mode=mistral,config_format=mistral,load_format=mistral,system_prompt=\"${system_prompt}\""
       elif [[ "$MODEL" == "HuggingFaceTB/SmolLM3-3B" ]]; then
-        generation_parameters="{\"temperature\":0.6,\"top_p\":0.95,\"max_new_tokens\":\"${CTX_LEN}\",\"seed\":9999}"
+        generation_parameters="{\"temperature\":0.6,\"top_p\":0.95,\"max_new_tokens\":\"${CTX_LEN}\"}"
         echo "Using LM360 generation parameters: $generation_parameters"
         model_args="model_name=${MODEL},dtype=${DTYPE},seed=1234,max_model_length=65000,trust_remote_code=true,tensor_parallel_size=1,generation_parameters=${generation_parameters}"
       else
-        generation_parameters="{\"temperature\":1.0,\"max_new_tokens\":\"${CTX_LEN}\",\"seed\":9999}"
+        generation_parameters="{\"temperature\":1.0,\"max_new_tokens\":\"${CTX_LEN}\"}"
         echo "Using default generation parameters: $generation_parameters"
         model_args="model_name=${MODEL},dtype=${DTYPE},seed=1234,max_model_length=102000,trust_remote_code=true,tensor_parallel_size=8,generation_parameters=${generation_parameters}"
       fi
